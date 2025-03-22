@@ -56,6 +56,15 @@
       margin-bottom: 0;
       margin-top: 16px;
       color: #555;
+      cursor: pointer;
+    }
+    .summary {
+      font-weight: bold;
+      color: #333;
+      background-color: #eef;
+      padding: 8px;
+      margin-top: 10px;
+      border-radius: 5px;
     }
   </style>
 </head>
@@ -63,7 +72,7 @@
 
 <h2>ACS 积分查询（流动性 vs 链上行为）</h2>
 <p>请输入地址（每行一个），点击“查询”以显示明细：</p>
-<textarea id="addressInput" rows="8" placeholder="0x..."></textarea>
+<textarea id="addressInput" rows="8" placeholder="0x... 每行一个地址"></textarea>
 <button onclick="startQuery()">开始查询</button>
 
 <div class="result-container">
@@ -144,12 +153,20 @@ function groupByProject(records, defiMap) {
   return grouped;
 }
 
-function renderTable(container, grouped) {
-  container.innerHTML = "";
+function renderTable(container, grouped, address, type, total, totalAll) {
+  const summary = document.createElement("div");
+  summary.className = "summary";
+  summary.innerText = `地址：${address} ｜ ${type}总分：${total} ${
+    type === "链上行为" ? `｜ 总积分：${totalAll}` : ""
+  }`;
+  container.appendChild(summary);
+
   for (const project in grouped) {
     const table = document.createElement("table");
     const title = document.createElement("h4");
-    title.innerText = project;
+    title.innerText = `📌 ${project}（点击折叠/展开）`;
+
+    const tbodyId = `tbody-${address}-${type}-${project}`;
     table.innerHTML = `
       <thead>
         <tr>
@@ -159,10 +176,10 @@ function renderTable(container, grouped) {
           <th onclick="sortTable(this, 3)">更新时间 ⬍</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="${tbodyId}">
         ${grouped[project].map(r => `
           <tr>
-            <td>${r.userAddress || ''}</td>
+            <td>${r.userAddress}</td>
             <td>${r.acsAmount}</td>
             <td>${new Date(r.createTime).toLocaleString()}</td>
             <td>${new Date(r.updateTime).toLocaleString()}</td>
@@ -170,30 +187,30 @@ function renderTable(container, grouped) {
         `).join("")}
       </tbody>
     `;
+
+    title.onclick = () => {
+      const tbody = document.getElementById(tbodyId);
+      if (tbody) tbody.style.display = (tbody.style.display === "none") ? "table-row-group" : "none";
+    };
+
     container.appendChild(title);
     container.appendChild(table);
   }
 }
 
-let sortDirection = {}; // 每个列单独记录排序方向
-
+let sortDirection = {};
 function sortTable(header, colIndex) {
   const table = header.closest("table");
   const tbody = table.querySelector("tbody");
   const rows = Array.from(tbody.rows);
-  const key = table.querySelector("h4")?.innerText || "";
-
-  const isAsc = !sortDirection[key + colIndex];
-  sortDirection[key + colIndex] = isAsc;
-
+  const key = header.innerText + colIndex;
+  const isAsc = !sortDirection[key];
+  sortDirection[key] = isAsc;
   rows.sort((a, b) => {
-    const aText = a.cells[colIndex].innerText;
-    const bText = b.cells[colIndex].innerText;
-    const aTime = new Date(aText).getTime();
-    const bTime = new Date(bText).getTime();
+    const aTime = new Date(a.cells[colIndex].innerText).getTime();
+    const bTime = new Date(b.cells[colIndex].innerText).getTime();
     return isAsc ? aTime - bTime : bTime - aTime;
   });
-
   rows.forEach(row => tbody.appendChild(row));
 }
 
@@ -212,11 +229,15 @@ async function startQuery() {
     liq.records.forEach(r => r.userAddress = address);
     onchain.records.forEach(r => r.userAddress = address);
 
+    const totalLiquidity = liq.records.reduce((sum, r) => sum + (r.acsAmount || 0), 0);
+    const totalOnchain = onchain.records.reduce((sum, r) => sum + (r.acsAmount || 0), 0);
+    const totalAll = totalLiquidity + totalOnchain;
+
     const liqGrouped = groupByProject(liq.records, liq.defiMap);
     const onchainGrouped = groupByProject(onchain.records, onchain.defiMap);
 
-    renderTable(liquidityContainer, liqGrouped);
-    renderTable(onchainContainer, onchainGrouped);
+    renderTable(liquidityContainer, liqGrouped, address, "流动性", totalLiquidity, totalAll);
+    renderTable(onchainContainer, onchainGrouped, address, "链上行为", totalOnchain, totalAll);
   }
 }
 </script>

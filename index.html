@@ -30,6 +30,7 @@
       background: #fff;
       padding: 10px;
       border: 1px solid #ccc;
+      overflow-x: auto;
     }
     table {
       width: 100%;
@@ -44,11 +45,17 @@
     th {
       background-color: #4CAF50;
       color: white;
+      cursor: pointer;
     }
     h3 {
       margin-top: 0;
       text-align: center;
       color: #333;
+    }
+    h4 {
+      margin-bottom: 0;
+      margin-top: 16px;
+      color: #555;
     }
   </style>
 </head>
@@ -145,7 +152,12 @@ function renderTable(container, grouped) {
     title.innerText = project;
     table.innerHTML = `
       <thead>
-        <tr><th>地址</th><th>积分</th><th>创建时间</th><th>更新时间</th></tr>
+        <tr>
+          <th>地址</th>
+          <th>积分</th>
+          <th onclick="sortTable(this, 2)">创建时间 ⬍</th>
+          <th onclick="sortTable(this, 3)">更新时间 ⬍</th>
+        </tr>
       </thead>
       <tbody>
         ${grouped[project].map(r => `
@@ -161,6 +173,28 @@ function renderTable(container, grouped) {
     container.appendChild(title);
     container.appendChild(table);
   }
+}
+
+let sortDirection = {}; // 每个列单独记录排序方向
+
+function sortTable(header, colIndex) {
+  const table = header.closest("table");
+  const tbody = table.querySelector("tbody");
+  const rows = Array.from(tbody.rows);
+  const key = table.querySelector("h4")?.innerText || "";
+
+  const isAsc = !sortDirection[key + colIndex];
+  sortDirection[key + colIndex] = isAsc;
+
+  rows.sort((a, b) => {
+    const aText = a.cells[colIndex].innerText;
+    const bText = b.cells[colIndex].innerText;
+    const aTime = new Date(aText).getTime();
+    const bTime = new Date(bText).getTime();
+    return isAsc ? aTime - bTime : bTime - aTime;
+  });
+
+  rows.forEach(row => tbody.appendChild(row));
 }
 
 async function startQuery() {

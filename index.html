@@ -2,198 +2,190 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>批量查询 DeFi 参与情况</title>
+  <title>ACS 查询：流动性 vs 链上行为</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      background-color: #f4f4f9;
-      color: #333;
+      font-family: Arial;
+      padding: 30px;
+      background-color: #f9f9f9;
     }
-    h1 {
-      color: #4CAF50;
-      text-align: center;
-    }
-    textarea {
+    textarea, button {
       width: 100%;
-      padding: 12px;
-      margin-bottom: 15px;
-      border-radius: 5px;
-      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 10px;
       font-size: 16px;
     }
-    button {
-      padding: 12px 25px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      width: 100%;
-      font-size: 18px;
+    h2 {
+      text-align: center;
+      color: #4CAF50;
     }
-    button:hover {
-      background-color: #45a049;
+    .result-container {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+      gap: 20px;
+    }
+    .table-wrapper {
+      flex: 1;
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 20px;
-      background-color: #fff;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-    table, th, td {
-      border: 1px solid #ddd;
+      margin-top: 10px;
     }
     th, td {
-      padding: 12px;
+      border: 1px solid #ccc;
+      padding: 6px;
       text-align: center;
     }
     th {
       background-color: #4CAF50;
       color: white;
     }
-    td {
-      background-color: #f9f9f9;
+    h3 {
+      margin-top: 0;
+      text-align: center;
+      color: #333;
     }
   </style>
 </head>
 <body>
 
-  <h1>批量查询 DeFi 参与情况</h1>
-  <p>请输入以太坊地址（每行一个），然后点击“查询”获取用户在 DeFi 项目中的 ACS 贡献信息：</p>
-  <textarea id="addresses" rows="6" placeholder="请输入钱包地址，每行一个..."></textarea><br>
-  <button onclick="batchQuery()">查询</button>
+<h2>ACS 积分查询（流动性 vs 链上行为）</h2>
+<p>请输入地址（每行一个），点击“查询”以显示明细：</p>
+<textarea id="addressInput" rows="8" placeholder="0x..."></textarea>
+<button onclick="startQuery()">开始查询</button>
 
-  <table id="resultTable">
-    <thead>
-      <tr>
-        <th>用户地址</th>
-        <th>DeFi 项目名称</th>
-        <th>ACS 积分</th>
-        <th>描述</th>
-        <th>创建时间</th>
-        <th>更新时间</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<div class="result-container">
+  <div class="table-wrapper">
+    <h3>流动性积分</h3>
+    <div id="liquidityTables"></div>
+  </div>
+  <div class="table-wrapper">
+    <h3>链上行为积分</h3>
+    <div id="onchainTables"></div>
+  </div>
+</div>
 
-  <script>
-const endpoint = 'https://acs-graphql.astar.network/graphql';
+<script>
+const endpoint = "https://acs-graphql.astar.network/graphql";
 
-async function batchQuery() {
-  const addresses = document.getElementById('addresses').value.trim().split('\n');
-  const resultTableBody = document.querySelector('#resultTable tbody');
-  resultTableBody.innerHTML = ''; // 清空之前的查询结果
-
-  // 构造GraphQL查询
+async function fetchLiquidity(address) {
   const query = `
-    query {
-      ${addresses.map(address => `
-        getUserAllDiscretionaryPoints(address: "${address.trim()}") {
-          userAddress
-          defiId
-          description
-          acsAmount
-          createTime
-          updateTime
-        }
-      `).join('\n')}
+    query GetUserAllDefiPoints($address: String!) {
+      getUserAllDefiPoints(address: $address) {
+        defiId
+        acsAmount
+        createTime
+        updateTime
+      }
+      getAllDefiInfo {
+        defiId
+        defiName
+      }
     }
   `;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables: { address } })
+  });
+  const data = await res.json();
+  return {
+    records: data.data.getUserAllDefiPoints || [],
+    defiMap: Object.fromEntries((data.data.getAllDefiInfo || []).map(i => [i.defiId, i.defiName]))
+  };
+}
 
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query })
-    });
-
-    const data = await response.json();
-
-    // 映射 DeFi ID 到名称
-    const defiMap = {
-      1: 'Velodrome',
-      2: 'Quickswap',
-      3: 'SoneX',
-      4: 'Kyo',
-      5: 'SoneFi',
-      6: 'Sonus',
-      7: 'UntitledBank',
-      8: 'SakeFinance',
-      9: 'Avalon',
-      10: 'WaveX',
-      12: 'SuperVol',
-      13: 'Stargate',
-      15: 'Macaron',
-      16: 'Synstation',
-      17: 'Yay',
-      18: 'Elfin',
-      19: 'Arcas',
-      20: 'Rektech',
-      21: 'TreasureHunt',
-      22: 'PosseStudios',
-      23: 'Mithraeum',
-      24: 'Unemeta',
-      25: 'DerbyRace',
-      26: 'Sonova',
-      27: 'Evermoon',
-      28: 'Arkada',
-      29: 'Overtrip',
-      30: 'LegendsOfVenari',
-      31: 'Biru',
-      32: 'Uniswap',
-      33: 'FractalVisions',
-      34: 'BaliGame',
-      35: 'Metakraft',
-      36: 'TwoPTwoE',
-      100: 'Surge',
-    };
-
-    // 处理查询结果
-    addresses.forEach((address, index) => {
-      // 确保数据存在，并且返回的值是一个数组
-      const userData = data.data.getUserAllDiscretionaryPoints;
-      
-      if (userData && userData.length > 0) {
-        userData.forEach(record => {
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${record.userAddress}</td>
-            <td>${defiMap[record.defiId] || '未知项目'}</td>
-            <td>${record.acsAmount}</td>
-            <td>${record.description || '无描述'}</td>
-            <td>${new Date(record.createTime).toLocaleString()}</td>
-            <td>${new Date(record.updateTime).toLocaleString()}</td>
-          `;
-          resultTableBody.appendChild(row);
-        });
-      } else {
-        // 如果没有数据，显示“未找到数据”
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td colspan="6">未找到数据或查询错误</td>
-        `;
-        resultTableBody.appendChild(row);
+async function fetchOnChain(address) {
+  const query = `
+    query GetUserAllDiscretionaryPoints($address: String!) {
+      getUserAllDiscretionaryPoints(address: $address) {
+        defiId
+        acsAmount
+        createTime
+        updateTime
       }
-    });
+      getAllDefiIdToName {
+        defiId
+        defiName
+      }
+    }
+  `;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables: { address } })
+  });
+  const data = await res.json();
+  return {
+    records: data.data.getUserAllDiscretionaryPoints || [],
+    defiMap: Object.fromEntries((data.data.getAllDefiIdToName || []).map(i => [i.defiId, i.defiName]))
+  };
+}
 
-  } catch (error) {
-    console.error("查询错误:", error);
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td colspan="6">查询失败，请重试</td>
+function groupByProject(records, defiMap) {
+  const grouped = {};
+  records.forEach(item => {
+    const name = defiMap[item.defiId] || "未知项目";
+    if (!grouped[name]) grouped[name] = [];
+    grouped[name].push(item);
+  });
+  return grouped;
+}
+
+function renderTable(container, grouped) {
+  container.innerHTML = "";
+  for (const project in grouped) {
+    const table = document.createElement("table");
+    const title = document.createElement("h4");
+    title.innerText = project;
+    table.innerHTML = `
+      <thead>
+        <tr><th>地址</th><th>积分</th><th>创建时间</th><th>更新时间</th></tr>
+      </thead>
+      <tbody>
+        ${grouped[project].map(r => `
+          <tr>
+            <td>${r.userAddress || ''}</td>
+            <td>${r.acsAmount}</td>
+            <td>${new Date(r.createTime).toLocaleString()}</td>
+            <td>${new Date(r.updateTime).toLocaleString()}</td>
+          </tr>
+        `).join("")}
+      </tbody>
     `;
-    resultTableBody.appendChild(row);
+    container.appendChild(title);
+    container.appendChild(table);
   }
 }
 
+async function startQuery() {
+  const addresses = document.getElementById("addressInput").value.trim().split("\n").filter(Boolean);
+  const liquidityContainer = document.getElementById("liquidityTables");
+  const onchainContainer = document.getElementById("onchainTables");
+  liquidityContainer.innerHTML = "";
+  onchainContainer.innerHTML = "";
 
-  </script>
+  for (const address of addresses) {
+    const [liq, onchain] = await Promise.all([
+      fetchLiquidity(address),
+      fetchOnChain(address)
+    ]);
+    liq.records.forEach(r => r.userAddress = address);
+    onchain.records.forEach(r => r.userAddress = address);
+
+    const liqGrouped = groupByProject(liq.records, liq.defiMap);
+    const onchainGrouped = groupByProject(onchain.records, onchain.defiMap);
+
+    renderTable(liquidityContainer, liqGrouped);
+    renderTable(onchainContainer, onchainGrouped);
+  }
+}
+</script>
 
 </body>
 </html>

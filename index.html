@@ -164,9 +164,18 @@ function renderTable(container, grouped, address, type, total, totalAll) {
   for (const project in grouped) {
     const table = document.createElement("table");
     const title = document.createElement("h4");
-    title.innerText = `📌 ${project}（点击折叠/展开）`;
 
-    const tbodyId = `tbody-${address}-${type}-${project}`;
+    const totalPoints = grouped[project].reduce((sum, r) => sum + (r.acsAmount || 0), 0);
+    const tbodyId = `tbody-${address}-${type}-${project.replace(/\s/g, '')}`;
+    title.innerText = `📌 ${project}（点击折叠/展开｜总分：${totalPoints}）`;
+
+    title.onclick = () => {
+      const tbody = document.getElementById(tbodyId);
+      if (tbody) {
+        tbody.style.display = (tbody.style.display === "none") ? "table-row-group" : "none";
+      }
+    };
+
     table.innerHTML = `
       <thead>
         <tr>
@@ -187,11 +196,6 @@ function renderTable(container, grouped, address, type, total, totalAll) {
         `).join("")}
       </tbody>
     `;
-
-    title.onclick = () => {
-      const tbody = document.getElementById(tbodyId);
-      if (tbody) tbody.style.display = (tbody.style.display === "none") ? "table-row-group" : "none";
-    };
 
     container.appendChild(title);
     container.appendChild(table);
